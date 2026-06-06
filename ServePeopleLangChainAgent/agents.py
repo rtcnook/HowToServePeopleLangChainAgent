@@ -11,7 +11,7 @@ from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage
 
 from .config import get_model, tavily_available, provider_label
-from .tools import web_search, read_url, parse_document
+from .tools import web_search, read_url, parse_document, list_documents
 from .prompts import (
     GOOGLE_SEARCH_PROMPT,
     URL_CONTEXT_PROMPT,
@@ -133,4 +133,6 @@ CEO_TOOLS = [
     delegate_match_positions,
     delegate_task,
     delegate_quality_review,
+    list_documents,
+    parse_document,
 ]
