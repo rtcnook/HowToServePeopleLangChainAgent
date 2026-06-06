@@ -29,11 +29,12 @@ def _get_ceo() -> "CompiledStateGraph":
 # ── Streaming public API ────────────────────────────────────────────────────
 
 _TOOL_LABELS = {
-    "delegate_google_search":  "🔍 正在联网搜索 ...",
-    "delegate_url_context":    "📄 正在读取网页 ...",
-    "delegate_job_search":     "💼 正在检索考公/考编岗位 ...",
-    "delegate_task":           "📝 正在执行任务 ...",
-    "delegate_quality_review": "✅ 正在审查结果 ...",
+    "delegate_google_search":     "🔍 正在联网搜索 ...",
+    "delegate_url_context":       "📄 正在读取网页 ...",
+    "delegate_job_search":        "💼 正在检索考公/考编岗位 ...",
+    "delegate_match_positions":   "🎯 正在匹配岗位条件 ...",
+    "delegate_task":              "📝 正在执行任务 ...",
+    "delegate_quality_review":    "✅ 正在审查结果 ...",
 }
 
 

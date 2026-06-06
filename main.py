@@ -59,6 +59,7 @@ def main() -> None:
     print(f"  ╰────────────────────────────────────────────────────────╯")
     print()
     print("  💡 试试：男，2019年毕业，计算机科学与技术，山西太原考公岗位")
+    print("  📎 提供文件：--file 招聘公告.pdf  + 你的基本信息")
     print("  📖 help 查看帮助  ·  exit 退出")
     print()
 
@@ -74,15 +75,33 @@ def main() -> None:
         if user_input.lower() in ("exit", "quit", "q"):
             print("  👋 再见！")
             break
+
+        # --file support: --file path + profile text
+        file_path = None
+        query = user_input
+        if user_input.startswith("--file "):
+            parts = user_input[7:].strip().split(" ", 1)
+            file_path = parts[0].strip()
+            query = parts[1].strip() if len(parts) > 1 else ""
+            if not query:
+                query = input("  📝 请输入你的基本信息: ").strip()
+            # Prepend file content to the query
+            from ServePeopleLangChainAgent.tools import parse_document
+            doc_text = parse_document.invoke({"file_path": file_path})
+            query = f"用户提供了招聘文件 ({file_path})，内容如下：\n\n{doc_text}\n\n---\n用户基本信息: {query}\n---\n请帮我解析职位表中的岗位，并结合用户信息逐个匹配筛选。先调用 parse_document 解析文件，再调用 delegate_match_positions 进行匹配（提供完整的用户画像和职位表内容）。"
+
         if user_input.lower() == "help":
             print("""
   ┌─ 帮助 ──────────────────────────────────────────┐
   │  考公岗位搜索  直接输入个人画像，例如：            │
   │    男，2019年毕业，计算机科学与技术，山西太原      │
   │                                                   │
+  │  提供招聘文件   --file 路径 + 个人信息              │
+  │    --file ./职位表.pdf 男, 计算机本科, 太原        │
+  │    支持 .pdf  .docx                               │
+  │                                                   │
   │  普通搜索      直接输入问题                       │
   │  读取链接      粘贴 URL                           │
-  │  写文档/分析   描述需求                           │
   │                                                   │
   │  exit / q      退出                               │
   └───────────────────────────────────────────────────┘
@@ -94,7 +113,7 @@ def main() -> None:
             sys.stdout.write("  ")
             sys.stdout.flush()
 
-            for chunk in run_stream(user_input):
+            for chunk in run_stream(query):
                 # Tool-call indicators come with leading \n
                 sys.stdout.write(chunk)
                 sys.stdout.flush()

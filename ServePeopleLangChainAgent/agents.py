@@ -11,19 +11,21 @@ from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage
 
 from .config import get_model, tavily_available, provider_label
-from .tools import web_search, read_url
+from .tools import web_search, read_url, parse_document
 from .prompts import (
     GOOGLE_SEARCH_PROMPT,
     URL_CONTEXT_PROMPT,
     JOB_SEARCH_PROMPT,
     TASK_PROMPT,
     QUALITY_PROMPT,
+    MATCH_PROMPT,
 )
 
 # ── Lazy agent singletons ───────────────────────────────────────────────────
 _google_search_agent = None
 _url_context_agent = None
 _job_search_agent = None
+_match_agent = None
 _task_agent = None
 _quality_agent = None
 _built = False
@@ -33,7 +35,7 @@ def ensure_built() -> None:
     """Build all five sub-agents (idempotent)."""
     global _built, \
         _google_search_agent, _url_context_agent, \
-        _job_search_agent, _task_agent, _quality_agent
+        _job_search_agent, _match_agent, _task_agent, _quality_agent
 
     if _built:
         return
@@ -44,6 +46,7 @@ def ensure_built() -> None:
     _google_search_agent = create_react_agent(model, [web_search], prompt=GOOGLE_SEARCH_PROMPT)
     _url_context_agent = create_react_agent(model, [read_url], prompt=URL_CONTEXT_PROMPT)
     _job_search_agent = create_react_agent(model, [web_search], prompt=JOB_SEARCH_PROMPT)
+    _match_agent = create_react_agent(model, [web_search, parse_document], prompt=MATCH_PROMPT)
     _task_agent = create_react_agent(model, [web_search, read_url], prompt=TASK_PROMPT)
     _quality_agent = create_react_agent(model, [web_search, read_url], prompt=QUALITY_PROMPT)
 
@@ -108,12 +111,26 @@ def delegate_quality_review(content: str) -> str:
     return _invoke(_quality_agent, content)
 
 
+@tool
+def delegate_match_positions(profile_and_doc: str) -> str:
+    """Match a user profile against recruitment positions from a parsed document.
+
+    Input format (include BOTH parts):
+    「用户画像: 男, 2019年毕业, 计算机科学与技术本科, 山西太原
+      职位表内容: [parsed document text here]」
+
+    The sub-agent will compare each position's requirements against the user profile
+    and return a structured match report with ✓/✗/⚠ per condition."""
+    return _invoke(_match_agent, profile_and_doc)
+
+
 # ── Tool list for the CEO ───────────────────────────────────────────────────
 
 CEO_TOOLS = [
     delegate_google_search,
     delegate_url_context,
     delegate_job_search,
+    delegate_match_positions,
     delegate_task,
     delegate_quality_review,
 ]
