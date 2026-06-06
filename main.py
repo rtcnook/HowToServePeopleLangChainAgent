@@ -6,8 +6,6 @@ Usage: uv run main.py
 """
 import os
 import sys
-import threading
-import time
 
 from dotenv import load_dotenv
 
@@ -34,37 +32,7 @@ if not _active:
         print(f"  {cfg['label']:12s} →  {cfg['keys'][0]}=***")
     sys.exit(1)
 
-from ServePeopleLangChainAgent import run as _run
-
-
-# ── Spinner ──────────────────────────────────────────────────────────────────
-
-_SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-
-
-def _spinner(stop: threading.Event, label: str):
-    i = 0
-    start = time.time()
-    while not stop.is_set():
-        elapsed = int(time.time() - start)
-        sys.stdout.write(f"\r  {_SPINNER[i % len(_SPINNER)]} {label} ({elapsed}s) ")
-        sys.stdout.flush()
-        time.sleep(0.12)
-        i += 1
-    sys.stdout.write("\r" + " " * 50 + "\r")
-    sys.stdout.flush()
-
-
-def run_with_spinner(user_input: str, label: str = "思考中") -> str:
-    stop = threading.Event()
-    t = threading.Thread(target=_spinner, args=(stop, label), daemon=True)
-    t.start()
-    try:
-        result = _run(user_input)
-    finally:
-        stop.set()
-        t.join(timeout=0.5)
-    return result
+from ServePeopleLangChainAgent import run_stream
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -122,14 +90,20 @@ def main() -> None:
             continue
 
         try:
-            answer = run_with_spinner(user_input, label="CEO 调度子 Agent 中")
             print(f"  {'─' * 56}")
-            for line in answer.split("\n"):
-                print(f"  {line}")
-            print(f"  {'─' * 56}")
+            sys.stdout.write("  ")
+            sys.stdout.flush()
+
+            for chunk in run_stream(user_input):
+                # Tool-call indicators come with leading \n
+                sys.stdout.write(chunk)
+                sys.stdout.flush()
+
+            print(f"\n  {'─' * 56}")
             print()
         except Exception as e:
             print(f"  ❌ {e}")
+            print()
             print()
 
 
