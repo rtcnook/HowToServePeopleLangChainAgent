@@ -1,58 +1,37 @@
 """
 Base tools for the HowToServePeopleLangChainAgent system.
 
-Search priority: Tavily (API) → DuckDuckGo (free fallback)
+Search: Tavily API (requires TAVILY_API_KEY in .env).
 """
 import os
 
 from dotenv import load_dotenv
-from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_core.tools import tool
 
 load_dotenv()
 
+# ── Web Search (Tavily) ─────────────────────────────────────────────────────
 
-# ── Web Search ──────────────────────────────────────────────────────────────
-# Two backends — preferred (Tavily) + fallback (DuckDuckGo)
+from tavily import TavilyClient
 
-_tavily_key = os.getenv("TAVILY_API_KEY", "").strip()
+_tavily_client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY", ""))
 
-if _tavily_key and not _tavily_key.startswith("tvly-"):
-    _tavily_key = ""          # placeholder guard
 
-if _tavily_key:
-    from tavily import TavilyClient
-
-    _tavily_client = TavilyClient(api_key=_tavily_key)
-
-    @tool
-    def web_search(query: str) -> str:
-        """Search the web for up-to-date information. Returns results with titles, URLs,
-        and content snippets.  Source attribution is included."""
-        try:
-            resp = _tavily_client.search(query, max_results=5, include_raw_content=False)
-            results = resp.get("results", [])
-            if not results:
-                return f"Tavily 搜索无结果。查询: {query}"
-            lines = []
-            for i, r in enumerate(results, 1):
-                lines.append(f"{i}. {r.get('title', '无标题')}")
-                lines.append(f"   URL: {r.get('url', 'N/A')}")
-                lines.append(f"   {r.get('content', '')[:400]}")
-            return "\n".join(lines)
-        except Exception as e:
-            return f"Tavily 搜索失败，降级到 DuckDuckGo。错误: {e}\n\n{DuckDuckGoSearchRun().invoke(query)}"
-
-else:
-    # DuckDuckGo fallback
-    _ddg = DuckDuckGoSearchRun()
-
-    @tool
-    def web_search(query: str) -> str:
-        """Search the web for up-to-date information. Returns results with source URLs.
-        (Powered by DuckDuckGo — install Tavily for richer results.)"""
-        return _ddg.invoke(query)
+@tool
+def web_search(query: str) -> str:
+    """Search the web for up-to-date information. Returns results with titles, URLs,
+    and content snippets. Source attribution is included."""
+    resp = _tavily_client.search(query, max_results=5, include_raw_content=False)
+    results = resp.get("results", [])
+    if not results:
+        return f"Tavily 搜索无结果。查询: {query}"
+    lines = []
+    for i, r in enumerate(results, 1):
+        lines.append(f"{i}. {r.get('title', '无标题')}")
+        lines.append(f"   URL: {r.get('url', 'N/A')}")
+        lines.append(f"   {r.get('content', '')[:400]}")
+    return "\n".join(lines)
 
 
 # ── URL Reader ──────────────────────────────────────────────────────────────

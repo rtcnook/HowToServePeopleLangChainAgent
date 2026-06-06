@@ -1,90 +1,136 @@
 """
-HowToServePeopleLangChainAgent  v0.2.0
+HowToServePeopleLangChainAgent
 ═══════════════════════════════
 
-Multi-agent system for Chinese civil-service / public-institution job search.
-LangChain + LangGraph  ·  Gemini / SiliconFlow Qwen  ·  Tavily / DuckDuckGo
-
-Usage:
-    # 1. 配置 .env
-    cp .env.example .env   → 填入 API keys
-
-    # 2. 运行
-    uv run main.py
-
-    # 或以编程方式调用
-    python -c "from ServePeopleLangChainAgent import run; print(run('...'))"
+Usage: uv run main.py
 """
 import os
 import sys
+import threading
+import time
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── Validate configuration ───────────────────────────────────────────────────
-provider = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
+from ServePeopleLangChainAgent.config import (
+    PROVIDERS,
+    is_configured,
+    active_provider,
+    provider_label,
+    active_model_name,
+    tavily_available,
+    langsmith_available,
+)
 
-if provider == "dashscope":
-    required = "DASHSCOPE_API_KEY"
-    display_name = "阿里云百炼 / qwen3.7-plus"
-elif provider == "siliconflow":
-    required = "SILICONFLOW_API_KEY"
-    display_name = "SiliconFlow / Qwen"
-else:
-    required = "GOOGLE_API_KEY"
-    display_name = "Google Gemini"
+# ── Validate ────────────────────────────────────────────────────────────────
 
-if not os.getenv(required):
-    print(f"⚠️  {required} 未设置！")
-    print(f"当前 LLM_PROVIDER={provider} → 需要 {required}")
+_active = active_provider()
+if not _active:
+    print("⚠️  未找到任何有效的 API Key。")
     print()
-    print("请将 API key 写入 .env 文件：")
-    print(f"  {required}=***")
-    print()
-    print("或切换到 gemini：")
-    print("  LLM_PROVIDER=gemini")
+    print("请在 .env 中配置以下任一服务的 Key：")
+    for name, cfg in PROVIDERS.items():
+        print(f"  {cfg['label']:12s} →  {cfg['keys'][0]}=***")
     sys.exit(1)
 
-from ServePeopleLangChainAgent import run
+from ServePeopleLangChainAgent import run as _run
 
+
+# ── Spinner ──────────────────────────────────────────────────────────────────
+
+_SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+
+def _spinner(stop: threading.Event, label: str):
+    i = 0
+    start = time.time()
+    while not stop.is_set():
+        elapsed = int(time.time() - start)
+        sys.stdout.write(f"\r  {_SPINNER[i % len(_SPINNER)]} {label} ({elapsed}s) ")
+        sys.stdout.flush()
+        time.sleep(0.12)
+        i += 1
+    sys.stdout.write("\r" + " " * 50 + "\r")
+    sys.stdout.flush()
+
+
+def run_with_spinner(user_input: str, label: str = "思考中") -> str:
+    stop = threading.Event()
+    t = threading.Thread(target=_spinner, args=(stop, label), daemon=True)
+    t.start()
+    try:
+        result = _run(user_input)
+    finally:
+        stop.set()
+        t.join(timeout=0.5)
+    return result
+
+
+# ── Main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    s_icon = "✓" if os.getenv("TAVILY_API_KEY", "").startswith("tvly-") else "✗ (DuckDuckGo)"
-    langsmith = "✓" if os.getenv("LANGSMITH_API_KEY") else "✗"
+    # -- scan .env for all configured services --
+    llm_lines = []
+    for name, cfg in PROVIDERS.items():
+        ok = is_configured(name)
+        mark = "✓" if ok else "✗"
+        llm_lines.append(f"    {cfg['label']:12s} {mark}")
 
-    print("=" * 60)
-    print(f"  HowToServePeopleLangChainAgent  v0.2.0")
-    print(f"  Model:  {display_name}")
-    print(f"  Search: Tavily {s_icon}")
-    print(f"  Trace:  LangSmith {langsmith}")
-    print("=" * 60)
+    search_ok = tavily_available()
+    ls_ok = langsmith_available()
+
     print()
-    print("试试输入：")
-    print("  「男，2019年毕业，计算机科学与技术，想找山西太原或汾阳考公考编岗位」")
+    print(f"  ╭─ ServePeopleLangChainAgent ────────────────────────────╮")
+    print(f"  │  LLM")
+    for line in llm_lines:
+        print(f"  │{line}")
+    print(f"  │  搜索       Tavily {'✓' if search_ok else '✗'}")
+    print(f"  │  追踪       LangSmith {'✓' if ls_ok else '✗'}")
+    print(f"  │  当前       {provider_label()} / {active_model_name()}")
+    print(f"  ╰────────────────────────────────────────────────────────╯")
+    print()
+    print("  💡 试试：男，2019年毕业，计算机科学与技术，山西太原考公岗位")
+    print("  📖 help 查看帮助  ·  exit 退出")
     print()
 
     while True:
         try:
-            user_input = input("\n👉 ").strip()
+            user_input = input("  ▸ ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\n👋 再见！")
+            print("\n  👋 再见！")
             break
 
         if not user_input:
             continue
         if user_input.lower() in ("exit", "quit", "q"):
-            print("👋 再见！")
+            print("  👋 再见！")
             break
+        if user_input.lower() == "help":
+            print("""
+  ┌─ 帮助 ──────────────────────────────────────────┐
+  │  考公岗位搜索  直接输入个人画像，例如：            │
+  │    男，2019年毕业，计算机科学与技术，山西太原      │
+  │                                                   │
+  │  普通搜索      直接输入问题                       │
+  │  读取链接      粘贴 URL                           │
+  │  写文档/分析   描述需求                           │
+  │                                                   │
+  │  exit / q      退出                               │
+  └───────────────────────────────────────────────────┘
+            """)
+            continue
 
-        print(f"\n⏳ CEO Agent 正在协调子 Agent ...\n")
         try:
-            answer = run(user_input)
-            print("─" * 60)
-            print(answer)
-            print("─" * 60)
+            answer = run_with_spinner(user_input, label="CEO 调度子 Agent 中")
+            print(f"  {'─' * 56}")
+            for line in answer.split("\n"):
+                print(f"  {line}")
+            print(f"  {'─' * 56}")
+            print()
         except Exception as e:
-            print(f"❌ 处理出错: {e}")
+            print(f"  ❌ {e}")
+            print()
 
 
 if __name__ == "__main__":

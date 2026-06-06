@@ -10,7 +10,7 @@ from langgraph.prebuilt import create_react_agent
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage
 
-from .config import get_model, tavily_available, PROVIDER
+from .config import get_model, tavily_available, provider_label
 from .tools import web_search, read_url
 from .prompts import (
     GOOGLE_SEARCH_PROMPT,
@@ -39,7 +39,7 @@ def ensure_built() -> None:
         return
 
     model = get_model()
-    print(f"[agents] 初始化 {PROVIDER.upper()} 模型, 6 个 Agent ...")
+    print(f"[agents] 初始化 {provider_label()} 模型, 6 个 Agent ...")
 
     _google_search_agent = create_react_agent(model, [web_search], prompt=GOOGLE_SEARCH_PROMPT)
     _url_context_agent = create_react_agent(model, [read_url], prompt=URL_CONTEXT_PROMPT)

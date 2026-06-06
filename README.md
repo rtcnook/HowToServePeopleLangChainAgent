@@ -2,9 +2,6 @@
 
 基于 **LangChain + LangGraph** 的多智能体考公/考编岗位检索系统。
 
-从 [HowToServePeopleAgent](../HowToServePeopleAgent)（Google ADK 版）迁移而来，
-改用 LangChain 生态实现同等功能。
-
 ---
 
 ## 架构
@@ -85,16 +82,18 @@ LLM_PROVIDER=dashscope          # 阿里云百炼（推荐）
 # 模型名称
 LLM_MODEL=qwen3.7-plus
 
-# 阿里云百炼 API Key（已配置分片存储）
-DASHSCOPE_KEY_P1=sk-770
-DASHSCOPE_KEY_P2=1a9956cc646a58523003f1748fd9c
+# 阿里云百炼 API Key
+DASHSCOPE_KEY=sk-...y
 
-# 搜索增强（可选，不填用免费的 DuckDuckGo）
-# TAVILY_API_KEY=***
+# LangSmith 追踪（可选）
+LANGSMITH_API_KEY=lsv2_p...y
+LANGSMITH_TRACING=true
+LANGSMITH_PROJECT=LangChainCourse
 
 # 阿里云 OSS（可选）
 OSS_ACCESS_KEY_ID=***
 OSS_ACCESS_KEY_SECRET=***
+OSS_BUCKET=***
 ```
 
 ### 3. 运行
@@ -233,7 +232,3 @@ LLM_MODEL=qwen3.7-plus   # 改成想要的名字
 ```bash
 TAVILY_API_KEY=*** your key
 ```
-
-### Q: Key 分两段是怎么回事？
-
-平台的 API Key 过滤器会截断完整 key。因此阿里云百炼的 key 分两段存储（`DASHSCOPE_KEY_P1` + `DASHSCOPE_KEY_P2`），代码中自动拼接。直接设置 `DASHSCOPE_API_KEY` 也可以。
