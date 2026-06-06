@@ -53,14 +53,26 @@ def read_url(url: str) -> str:
         return f"读取 URL 失败 ({url}): {e}"
 
 
-# ── Document Parser (PDF / Word) ───────────────────────────────────────────
+# ── Document Parser (PDF / Word / Excel) ────────────────────────────────────
+
+_MAX_CHARS = 20000
+
+_SUPPORTED = {
+    ".pdf": "PDF",
+    ".docx": "Word (docx)",
+    ".doc": "Word (doc)",
+    ".xlsx": "Excel (xlsx)",
+    ".xls": "Excel (xls)",
+    ".et": "WPS 表格",
+}
+
 
 @tool
 def parse_document(file_path: str) -> str:
-    """Parse a recruitment document (PDF or .docx) and extract all its text content.
+    """Parse a recruitment document — PDF, Word (.docx), or Excel (.xlsx/.xls).
 
     Use this when the user uploads a 招聘公告 / 职位表 / 报考简章 file.
-    Supports .pdf and .docx formats.
+    Excel files are treated as position tables with column headers.
 
     Returns the full text, or an error if parsing fails."""
     path = Path(file_path)
@@ -68,6 +80,8 @@ def parse_document(file_path: str) -> str:
         return f"文件不存在: {file_path}"
 
     suffix = path.suffix.lower()
+    if suffix not in _SUPPORTED:
+        return f"不支持的文件格式: {suffix}。支持: {', '.join(_SUPPORTED.values())}"
 
     try:
         if suffix == ".pdf":
@@ -75,7 +89,7 @@ def parse_document(file_path: str) -> str:
         elif suffix in (".docx", ".doc"):
             return _parse_docx(path)
         else:
-            return f"不支持的文件格式: {suffix}。请提供 .pdf 或 .docx 文件。"
+            return _parse_excel(path)
     except Exception as e:
         return f"解析文件失败 ({file_path}): {e}"
 
@@ -92,8 +106,8 @@ def _parse_pdf(path: Path) -> str:
     doc.close()
 
     full = "\n\n".join(pages)
-    if len(full) > 15000:
-        full = full[:15000] + "\n\n... [已截断]"
+    if len(full) > _MAX_CHARS:
+        full = full[:_MAX_CHARS] + "\n\n... [已截断]"
     return f"[PDF] {path.name}\n\n{full}"
 
 
@@ -106,7 +120,6 @@ def _parse_docx(path: Path) -> str:
         if para.text.strip():
             paragraphs.append(para.text)
 
-    # Also try to extract tables
     for table in doc.tables:
         for row in table.rows:
             cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
@@ -114,6 +127,44 @@ def _parse_docx(path: Path) -> str:
                 paragraphs.append(" | ".join(cells))
 
     full = "\n".join(paragraphs)
-    if len(full) > 15000:
-        full = full[:15000] + "\n\n... [已截断]"
+    if len(full) > _MAX_CHARS:
+        full = full[:_MAX_CHARS] + "\n\n... [已截断]"
     return f"[DOCX] {path.name}\n\n{full}"
+
+
+def _parse_excel(path: Path) -> str:
+    suffix = path.suffix.lower()
+
+    if suffix in (".xls",):
+        import xlrd
+        wb = xlrd.open_workbook(str(path))
+        sheets = []
+        for name in wb.sheet_names():
+            ws = wb.sheet_by_name(name)
+            rows = []
+            for r in range(ws.nrows):
+                cells = [str(ws.cell_value(r, c)).strip() for c in range(ws.ncols) if str(ws.cell_value(r, c)).strip()]
+                if cells:
+                    rows.append(" | ".join(cells))
+            if rows:
+                sheets.append(f"【{name}】\n" + "\n".join(rows))
+    else:
+        import openpyxl
+        wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+        sheets = []
+        for name in wb.sheetnames:
+            ws = wb[name]
+            rows = []
+            for row in ws.iter_rows(values_only=True):
+                cells = [str(c).strip() for c in row if c is not None and str(c).strip()]
+                if cells:
+                    rows.append(" | ".join(cells))
+            if rows:
+                sheets.append(f"【{name}】\n" + "\n".join(rows))
+        wb.close()
+
+    full = "\n\n".join(sheets)
+    fmt = _SUPPORTED.get(suffix, suffix)
+    if len(full) > _MAX_CHARS:
+        full = full[:_MAX_CHARS] + "\n\n... [已截断]"
+    return f"[{fmt}] {path.name}\n\n{full}"
